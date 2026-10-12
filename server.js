@@ -3,6 +3,8 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -257,6 +259,10 @@ const STATIC = {
   '/static/map.js': ['public/map.js', 'text/javascript; charset=utf-8'],
 };
 
+const ASSET_VERSIONS = Object.fromEntries(Object.entries(STATIC).map(([path, [file]]) =>
+  [path, createHash('sha256').update(readFileSync(join(ROOT, file))).digest('hex').slice(0, 10)]));
+V.setAssetVersions(ASSET_VERSIONS);
+
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
@@ -269,7 +275,9 @@ const server = createServer(async (req, res) => {
     }
     if (method === 'GET' && STATIC[url.pathname]) {
       const [file, type] = STATIC[url.pathname];
-      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'public, max-age=3600' });
+      // Med rätt versionsnummer i adressen kan filen sparas länge; annars måste webbläsaren fråga igen.
+      const versioned = url.searchParams.get('v') === ASSET_VERSIONS[url.pathname];
+      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': versioned ? 'public, max-age=31536000, immutable' : 'no-cache' });
       return res.end(await readFile(join(ROOT, file)));
     }
     if (method === 'GET' && url.pathname === '/healthz') {
