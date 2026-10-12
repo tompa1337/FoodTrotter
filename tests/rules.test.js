@@ -77,3 +77,11 @@ test('samling och kontinentbadge', () => {
   assert.equal(col.totals.dishes, 13);
   assert.equal(col.totals.continentBadges, 1);
 });
+
+test('alla länder har karta, huvudstad och matkultur', async () => {
+  const { SHAPES } = await import('../data/worldmap.js');
+  for (const c of COUNTRIES) {
+    assert.ok(SHAPES[c.code], `karta saknas: ${c.code}`);
+    assert.ok(c.capital && c.culture, `info saknas: ${c.code}`);
+  }
+});

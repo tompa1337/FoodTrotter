@@ -2,6 +2,7 @@
 
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { gzipSync } from 'node:zlib';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -52,6 +53,11 @@ function withParams(path, params) {
 }
 
 function send(res, status, html, headers = {}) {
+  let body = html;
+  if (body.length > 1024 && /\bgzip\b/.test(res.req?.headers['accept-encoding'] || '')) {
+    body = gzipSync(body);
+    headers = { ...headers, 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' };
+  }
   res.writeHead(status, {
     'Content-Type': 'text/html; charset=utf-8',
     'X-Content-Type-Options': 'nosniff',
@@ -59,7 +65,7 @@ function send(res, status, html, headers = {}) {
     'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self'; style-src-attr 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'",
     ...headers,
   });
-  res.end(html);
+  res.end(body);
 }
 
 const redirect = (res, location, headers = {}) => {
@@ -94,6 +100,7 @@ const routes = {
     return {
       title: null,
       active: 'week',
+      scripts: ['/static/map.js'],
       notice: V.noticeFor(url.searchParams, country),
       body: V.weekPage({
         user, today, monday,
@@ -211,6 +218,22 @@ function dynamicRoute(method, path, ctx) {
       }),
     };
   }
+  if (method === 'GET' && (m = path.match(/^\/land\/([a-z]{2})\/kort$/))) {
+    const country = COUNTRY_BY_CODE.get(m[1]);
+    if (!country) return null;
+    const { user, today, url } = ctx;
+    const nextDay = nextNationalDay(country, today);
+    const week = evaluateCook(country, today);
+    return {
+      fragment: V.countryPanel({
+        country, user, today, nextDay,
+        next: safeNext(url.searchParams.get('next')),
+        daysLeft: Math.round((parseDate(nextDay) - parseDate(today)) / 86_400_000),
+        inWeek: week.flag, weekDate: week.nationalDay,
+        state: user ? collectionFor(user.id).byCountry.get(country.code) : null,
+      }),
+    };
+  }
   if (method === 'GET' && (m = path.match(/^\/kock\/([a-zA-Z0-9_.-]{1,24})$/))) {
     const owner = repo.userByName(m[1]);
     if (!owner) return null;
@@ -228,7 +251,10 @@ function dynamicRoute(method, path, ctx) {
 
 // ── Server ─────────────────────────────────────────────────────
 
-const STATIC = { '/static/style.css': ['public/style.css', 'text/css; charset=utf-8'] };
+const STATIC = {
+  '/static/style.css': ['public/style.css', 'text/css; charset=utf-8'],
+  '/static/map.js': ['public/map.js', 'text/javascript; charset=utf-8'],
+};
 
 const server = createServer(async (req, res) => {
   try {
@@ -266,6 +292,7 @@ const server = createServer(async (req, res) => {
     }
     const headers = result.cookie ? { 'Set-Cookie': result.cookie } : {};
     if (result.redirect) return redirect(res, result.redirect, headers);
+    if (result.fragment) return send(res, 200, result.fragment, { 'Cache-Control': 'no-store' });
 
     const wonId = url.searchParams.get('vann');
     const continentWon = url.searchParams.get('ok') && CONTINENTS.find((c) => c.id === wonId)?.name;

@@ -5,6 +5,7 @@ Laga världens nationalrätter och samla flaggor.
 - **Flagga:** laga ett lands nationalrätt samma kalendervecka (måndag–söndag) som landets nationaldag.
 - **Guldkant:** laga den *på* nationaldagen.
 - **Kontinentbadge:** samla alla flaggor i en kontinent. Är alla flaggor guld blir badgen guld.
+- **Världskarta på startsidan:** veckans nationaldagsländer lyser, dina flaggor färgas gröna/guld. Tryck på ett land för huvudstad, nationalrätt och matkultur – och lagningsknappen om landet firar den veckan.
 - Konton, egen samling (`/kock/<användarnamn>`) och topplista.
 
 ## Kom igång
@@ -35,11 +36,14 @@ Appen är en enda Node-process med en SQLite-fil, så den passar t.ex. Fly.io, R
 ```
 server.js            webbserver och routes
 data/countries.js    alla 193 FN-länder: nationaldag, nationalrätt, kontinent
+data/details.js      huvudstad och matkultur per land
+data/worldmap.js     kartans former (genererad av tools/build_map.py)
 lib/rules.js         spelreglerna (veckor, flaggor, guld, kontinenter)
 lib/db.js            databas (node:sqlite)
 lib/auth.js          konton, lösenord (scrypt) och sessioner
 lib/views.js         HTML-sidor
-public/              CSS och flaggor
+public/              CSS, kartans JavaScript och flaggor
+tools/build_map.py   bygger om kartan från Natural Earth
 tests/               tester för reglerna
 ```
 
@@ -55,5 +59,7 @@ tests/               tester för reglerna
 - 193 FN-medlemsländer. Gränsländer: Ryssland och Cypern → Europa; Turkiet, Georgien, Armenien, Azerbajdzjan och Kazakstan → Asien; Centralamerika och Karibien → Nordamerika.
 - Många länder saknar officiell nationalrätt; då är det den rätt som oftast nämns. Granska och justera fritt i `data/countries.js`.
 - Storbritannien har ingen officiell nationaldag; appen använder kungens officiella födelsedag (andra lördagen i juni). Israels självständighetsdag följer den hebreiska kalendern och är satt till 14 maj.
+
+Karta: [Natural Earth](https://www.naturalearthdata.com/) (public domain), Equal Earth-projektion. Små länder visas som prickar när de är aktuella.
 
 Flaggor: [flag-icons](https://github.com/lipis/flag-icons), MIT-licens (se `public/flags/LICENSE`).

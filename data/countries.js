@@ -11,6 +11,8 @@
 //   Ryssland, Cypern → Europa · Turkiet, Georgien, Armenien, Azerbajdzjan, Kazakstan → Asien
 //   Egypten → Afrika · Centralamerika och Karibien → Nordamerika
 
+import { DETAILS } from './details.js';
+
 export const CONTINENTS = [
   { id: 'europa', name: 'Europa' },
   { id: 'asien', name: 'Asien' },
@@ -231,6 +233,8 @@ const ROWS = [
 
 export const COUNTRIES = ROWS.map(([code, name, continent, day, occasion, dish, description, note]) => ({
   code, name, continent, day, occasion, dish, description, note: note || null,
+  capital: DETAILS[code]?.[0] ?? null,
+  culture: DETAILS[code]?.[1] ?? null,
 }));
 
 export const COUNTRY_BY_CODE = new Map(COUNTRIES.map((c) => [c.code, c]));

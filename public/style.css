@@ -241,3 +241,72 @@ input[type="date"] { min-height: 40px; }
 /* Sidfot */
 .site-footer { margin-top: 64px; padding-top: 24px; padding-bottom: 40px; border-top: 1px solid var(--line); color: var(--ink-2); font-size: .9rem; }
 .site-footer p { max-width: 70ch; }
+
+/* Världskarta */
+:root { --land: #dcd1bd; --land-hover: #c9bba3; --land-bg: #e8dfcf; }
+@media (prefers-color-scheme: dark) { :root { --land: #3d352e; --land-hover: #51473e; --land-bg: #2e2823; } }
+
+.map-card {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 20px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 16px; margin-top: 20px; box-shadow: var(--shadow);
+}
+.map-scroll { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.world { display: block; width: 100%; height: auto; }
+.world .land-bg { fill: var(--land-bg); }
+.world a path { fill: var(--land); stroke: var(--card); stroke-width: .5; vector-effect: non-scaling-stroke; transition: fill .15s; cursor: pointer; }
+.world a:hover path, .world a:focus path { fill: var(--land-hover); }
+.world a:focus { outline: none; }
+.world a.earned path { fill: var(--green); }
+.world a.gold path { fill: var(--gold); }
+.world a.active path { fill: var(--accent); animation: glow 2.4s ease-in-out infinite; }
+.world a.active.earned path, .world a.active.gold path { animation: none; stroke: var(--accent); stroke-width: 1.5; }
+.world a.active.earned path { fill: var(--green); }
+.world a.active.gold path { fill: var(--gold); }
+.world a.selected path { stroke: var(--ink); stroke-width: 1.6; }
+.world a.dot circle { fill: var(--land-hover); stroke: var(--card); stroke-width: 1; vector-effect: non-scaling-stroke; cursor: pointer; }
+.world a.dot.earned circle { fill: var(--green); }
+.world a.dot.gold circle { fill: var(--gold); }
+.world a.dot.active circle { fill: var(--accent); }
+.world a.dot.selected circle:not(.halo) { stroke: var(--ink); stroke-width: 2; }
+.world a.dot .halo { fill: var(--accent); stroke: none; opacity: .35; transform-box: fill-box; transform-origin: center; animation: halo 2.4s ease-out infinite; }
+@keyframes glow { 50% { opacity: .6; } }
+@keyframes halo { from { transform: scale(.4); opacity: .55; } to { transform: scale(1.4); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .world a.active path, .world .halo { animation: none; } }
+
+.map-legend { grid-column: 1; display: flex; flex-wrap: wrap; gap: 6px 18px; list-style: none; margin: 12px 0 0; padding: 0; font-size: .85rem; color: var(--ink-2); }
+.map-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.sw-active { background: var(--accent); }
+.sw-earned { background: var(--green); }
+.sw-gold { background: var(--gold); }
+
+.map-panel { position: relative; padding: 16px 0 4px; border-top: 1px solid var(--line); margin-top: 12px; }
+.map-panel.loading { opacity: .5; }
+.panel-close {
+  position: absolute; top: 10px; right: 0; width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--paper); color: var(--ink); font-size: 1.2rem; line-height: 1; cursor: pointer;
+}
+.panel-head { display: flex; gap: 14px; align-items: center; padding-right: 40px; margin-bottom: 10px; }
+.panel-head h3 { margin: 0; }
+.panel-head .eyebrow { margin: 0 0 2px; }
+.flag-md { width: 64px; height: 48px; border-radius: 6px; flex: none; }
+.panel-when { background: var(--paper-2); border-radius: 10px; padding: 10px 12px; font-size: .95rem; }
+.panel-when.is-active { background: var(--accent-soft); }
+.panel-block { margin: 12px 0; }
+.panel-block .eyebrow { margin-bottom: 2px; }
+.panel-block p { margin-bottom: .3em; }
+.panel-dish { font: 600 1.25rem/1.2 var(--serif); }
+.map-panel .cook-form { margin: 14px 0 6px; }
+.panel-links { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 12px 0 0; font-size: .95rem; }
+.panel-links a:first-child { font-weight: 600; text-decoration: none; color: var(--accent); }
+
+@media (min-width: 900px) {
+  .map-card:has(.map-panel:not([hidden])) { grid-template-columns: minmax(0, 1fr) 320px; }
+  .map-panel { grid-column: 2; grid-row: 1 / span 2; border-top: 0; margin: 0; padding: 4px 0 0 20px; border-left: 1px solid var(--line); align-self: start; }
+  .map-legend { grid-column: 1; }
+}
+@media (max-width: 699px) {
+  .map-card { padding: 12px; margin-left: -4px; margin-right: -4px; }
+  .world { width: 760px; max-width: none; }
+}
