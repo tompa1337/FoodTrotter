@@ -251,7 +251,7 @@ input[type="date"] { min-height: 40px; }
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 16px; margin-top: 20px; box-shadow: var(--shadow);
 }
-.map-scroll { position: relative; overflow: hidden; border-radius: 10px; }
+.map-scroll { position: relative; overflow: hidden; border-radius: 10px; align-self: start; }
 .map-zoom { position: absolute; top: 8px; right: 8px; z-index: 2; display: flex; flex-direction: column; gap: 6px; }
 .map-zoom button {
   width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink);
@@ -263,6 +263,9 @@ input[type="date"] { min-height: 40px; }
 @media (pointer: coarse) { .hint-desktop { display: none; } .hint-touch { display: inline; } }
 .world { display: block; width: 100%; height: auto; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .world.zoomed { touch-action: none; cursor: grab; }
+.world { overflow: visible; transform-origin: 0 0; aspect-ratio: 1000 / 437; }
+.world.moving { will-change: transform; }
+.world.moving a { pointer-events: none; }
 .world.zoomed:active { cursor: grabbing; }
 .world .land-bg { fill: var(--land-bg); }
 .world a path { fill: var(--land); stroke: var(--card); stroke-width: .5; vector-effect: non-scaling-stroke; transition: fill .15s; cursor: pointer; }

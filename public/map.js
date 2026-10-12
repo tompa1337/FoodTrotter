@@ -47,6 +47,7 @@
   svg.addEventListener('click', (e) => {
     const link = e.target.closest('a[data-code]');
     if (!link || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    if (e.detail > 1) { e.preventDefault(); return; } // andra klicket i ett dubbelklick zoomar bara
     e.preventDefault();
     open(link.dataset.code, e.detail === 0); // detail 0 = aktiverad med tangentbordet
   });
@@ -60,73 +61,132 @@
   });
 
   // ── Zoom och panorering ─────────────────────────────────────
+  // För att det ska gå mjukt flyttas och skalas kartan med CSS-transform medan man zoomar/drar
+  // (grafikkortet gör jobbet). När rörelsen är klar ritas kartan om skarpt via viewBox.
   const [, , W, H] = svg.getAttribute('viewBox').split(/\s+/).map(Number);
   const MAX_ZOOM = 10;
-  const view = { x: 0, y: 0, w: W, h: H };
-  const zoomBox = scroller?.querySelector('.map-zoom');
+  const host = scroller || svg.parentElement;
+  const zoomBox = host.querySelector('.map-zoom');
   const resetBtn = zoomBox?.querySelector('[data-zoom="reset"]');
   const dots = [...svg.querySelectorAll('circle[data-r]')];
 
-  const zoomLevel = () => W / view.w;
-  // Rutans form (på mobil är den högre än själva världskartan).
-  const aspect = () => { const r = svg.getBoundingClientRect(); return r.width ? r.height / r.width : H / W; };
+  let view = { x: 0, y: 0, w: W, h: H }; // det som just nu är ritat (viewBox)
+  let cur = { ...view };                  // det som visas (viewBox + transform)
+  let frame = 0;
+  let tween = null;
 
-  function apply() {
-    // Håll kartan inom sina kanter; är rutan högre än kartan centreras den lodrätt.
-    view.w = Math.min(W, Math.max(W / MAX_ZOOM, view.w));
-    view.h = view.w * aspect();
-    view.x = Math.min(W - view.w, Math.max(0, view.x));
-    view.y = view.h >= H ? (H - view.h) / 2 : Math.min(H - view.h, Math.max(0, view.y));
+  const box = () => host.getBoundingClientRect();
+  // Rutans form (på mobil är den högre än själva världskartan).
+  const aspect = () => { const r = box(); return r.width ? r.height / r.width : H / W; };
+
+  function clamp(v) {
+    const w = Math.min(W, Math.max(W / MAX_ZOOM, v.w));
+    const h = w * aspect();
+    const x = Math.min(W - w, Math.max(0, v.x));
+    const y = h >= H ? (H - h) / 2 : Math.min(H - h, Math.max(0, v.y));
+    return { x, y, w, h };
+  }
+
+  function paint() {
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      const r = box();
+      const s = view.w / cur.w;
+      const tx = ((view.x - cur.x) / cur.w) * r.width;
+      const ty = ((view.y - cur.y) / cur.h) * r.height;
+      svg.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+    });
+  }
+
+  function commit() {
+    if (frame) { cancelAnimationFrame(frame); frame = 0; }
+    cur = clamp(cur);
+    view = { ...cur };
     svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
-    const k = zoomLevel();
+    svg.style.transform = '';
+    svg.classList.remove('moving');
+    const k = W / view.w;
     // Prickarna för små länder växer inte i samma takt som kartan.
     for (const c of dots) c.setAttribute('r', (Number(c.dataset.r) / Math.pow(k, 0.75)).toFixed(2));
-    const zoomed = k > 1.01;
-    svg.classList.toggle('zoomed', zoomed);
-    if (resetBtn) resetBtn.hidden = !zoomed;
+    svg.classList.toggle('zoomed', k > 1.01);
+    if (resetBtn) resetBtn.hidden = k <= 1.01;
   }
 
-  /** Skärmpunkt → kartkoordinat. */
-  function toMap(clientX, clientY) {
-    const r = svg.getBoundingClientRect();
-    return { x: view.x + ((clientX - r.left) / r.width) * view.w, y: view.y + ((clientY - r.top) / r.height) * view.h };
+  function show(v) {
+    cur = clamp(v);
+    svg.classList.add('moving');
+    paint();
   }
 
-  /** Zooma med faktorn f kring en kartpunkt (som stannar kvar under fingret/musen). */
-  function zoomAt(f, mx, my) {
-    const newW = Math.min(W, Math.max(W / MAX_ZOOM, view.w / f));
-    const ratio = newW / view.w;
-    view.x = mx - (mx - view.x) * ratio;
-    view.y = my - (my - view.y) * ratio;
-    view.w = newW;
-    apply();
-  window.addEventListener('resize', apply);
+  /** Skärmpunkt → kartkoordinat (i det som visas just nu). */
+  function toMap(clientX, clientY, v = cur) {
+    const r = box();
+    return { x: v.x + ((clientX - r.left) / r.width) * v.w, y: v.y + ((clientY - r.top) / r.height) * v.h };
   }
 
-  function zoomCenter(f) {
-    zoomAt(f, view.x + view.w / 2, view.y + view.h / 2);
+  /** Ny vy, inzoomad med faktorn f kring kartpunkten (mx, my) som stannar på samma ställe. */
+  function zoomedView(v, f, mx, my) {
+    const w = Math.min(W, Math.max(W / MAX_ZOOM, v.w / f));
+    const ratio = w / v.w;
+    return { x: mx - (mx - v.x) * ratio, y: my - (my - v.y) * ratio, w, h: v.h * ratio };
+  }
+
+  const ease = (t) => 1 - Math.pow(1 - t, 3);
+
+  /** Glid mjukt till en ny vy. */
+  function animateTo(target, ms = 280) {
+    const to = clamp(target);
+    const from = { ...cur };
+    const fc = { x: from.x + from.w / 2, y: from.y + from.h / 2 };
+    const tc = { x: to.x + to.w / 2, y: to.y + to.h / 2 };
+    const t0 = performance.now();
+    if (tween) cancelAnimationFrame(tween.raf);
+    tween = { to };
+    const step = (now) => {
+      const t = Math.min(1, (now - t0) / ms);
+      const e = ease(t);
+      const w = from.w * Math.pow(to.w / from.w, e); // logaritmiskt känns jämnast
+      const h = w * aspect();
+      const cx = fc.x + (tc.x - fc.x) * e, cy = fc.y + (tc.y - fc.y) * e;
+      cur = { x: cx - w / 2, y: cy - h / 2, w, h };
+      svg.classList.add('moving');
+      paint();
+      if (t < 1) tween.raf = requestAnimationFrame(step);
+      else { tween = null; cur = to; commit(); }
+    };
+    tween.raf = requestAnimationFrame(step);
+  }
+
+  function stopTween() {
+    if (tween) { cancelAnimationFrame(tween.raf); tween = null; }
   }
 
   zoomBox?.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-zoom]');
     if (!btn) return;
-    if (btn.dataset.zoom === 'in') zoomCenter(1.6);
-    else if (btn.dataset.zoom === 'out') zoomCenter(1 / 1.6);
-    else { view.x = 0; view.y = 0; view.w = W; apply(); }
+    const base = tween?.to || cur;
+    const c = { x: base.x + base.w / 2, y: base.y + base.h / 2 };
+    if (btn.dataset.zoom === 'in') animateTo(zoomedView(base, 1.8, c.x, c.y));
+    else if (btn.dataset.zoom === 'out') animateTo(zoomedView(base, 1 / 1.8, c.x, c.y));
+    else animateTo({ x: 0, y: 0, w: W, h: H }, 350);
   });
 
   // Dator: Ctrl/Cmd + scroll (eller nypning på styrplattan). Vanlig scroll rullar sidan som vanligt.
   svg.addEventListener('wheel', (e) => {
     if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
-    const p = toMap(e.clientX, e.clientY);
-    zoomAt(Math.exp(-Math.max(-100, Math.min(100, e.deltaY)) * 0.006), p.x, p.y);
+    const base = tween?.to || cur;
+    const p = toMap(e.clientX, e.clientY, base);
+    const delta = Math.max(-100, Math.min(100, e.deltaMode === 1 ? e.deltaY * 30 : e.deltaY));
+    animateTo(zoomedView(base, Math.exp(-delta * 0.006), p.x, p.y), 160);
   }, { passive: false });
 
   svg.addEventListener('dblclick', (e) => {
     e.preventDefault();
-    const p = toMap(e.clientX, e.clientY);
-    zoomAt(e.shiftKey ? 1 / 2 : 2, p.x, p.y);
+    const base = tween?.to || cur;
+    const p = toMap(e.clientX, e.clientY, base);
+    animateTo(zoomedView(base, e.shiftKey ? 1 / 2 : 2, p.x, p.y));
   });
 
   // Dra för att flytta, nyp med två fingrar för att zooma.
@@ -136,17 +196,23 @@
 
   function startGesture() {
     const pts = [...pointers.values()];
+    const r = box();
     if (pts.length === 1) {
-      gesture = { type: 'pan', sx: pts[0].x, sy: pts[0].y, vx: view.x, vy: view.y };
+      gesture = { type: 'pan', sx: pts[0].x, sy: pts[0].y, start: { ...cur }, scale: cur.w / r.width };
     } else if (pts.length >= 2) {
       const [a, b] = pts;
-      const mid = toMap((a.x + b.x) / 2, (a.y + b.y) / 2);
-      gesture = { type: 'pinch', dist: Math.hypot(a.x - b.x, a.y - b.y), w: view.w, mid, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+      gesture = {
+        type: 'pinch',
+        dist: Math.hypot(a.x - b.x, a.y - b.y),
+        start: { ...cur },
+        mid: toMap((a.x + b.x) / 2, (a.y + b.y) / 2),
+      };
     }
   }
 
   svg.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+    stopTween();
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 1) dragged = false;
     startGesture();
@@ -155,36 +221,30 @@
   svg.addEventListener('pointermove', (e) => {
     if (!pointers.has(e.pointerId)) return;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    const r = svg.getBoundingClientRect();
-    const scale = view.w / r.width;
     if (gesture?.type === 'pan') {
       const dx = e.clientX - gesture.sx, dy = e.clientY - gesture.sy;
       if (!dragged && Math.hypot(dx, dy) < 6) return;
-      if (zoomLevel() <= 1.01) return; // hela världen syns redan
+      if (W / cur.w <= 1.01) return; // hela världen syns redan
       dragged = true;
       svg.setPointerCapture?.(e.pointerId);
-      view.x = gesture.vx - dx * scale;
-      view.y = gesture.vy - dy * scale;
-      apply();
-    } else if (gesture?.type === 'pinch' && pointers.size >= 2) {
+      show({ ...gesture.start, x: gesture.start.x - dx * gesture.scale, y: gesture.start.y - dy * gesture.scale });
+    } else if (gesture?.type === 'pinch' && pointers.size >= 2 && gesture.dist) {
       const [a, b] = [...pointers.values()];
       const dist = Math.hypot(a.x - b.x, a.y - b.y);
-      if (!gesture.dist) return;
       dragged = true;
-      view.w = Math.min(W, Math.max(W / MAX_ZOOM, gesture.w * (gesture.dist / dist)));
-      view.h = view.w * aspect();
+      const r = box();
+      const w = Math.min(W, Math.max(W / MAX_ZOOM, gesture.start.w * (gesture.dist / dist)));
+      const h = w * aspect();
       // Håll punkten mellan fingrarna på samma ställe.
       const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
-      view.x = gesture.mid.x - ((cx - r.left) / r.width) * view.w;
-      view.y = gesture.mid.y - ((cy - r.top) / r.height) * view.h;
-      apply();
+      show({ x: gesture.mid.x - ((cx - r.left) / r.width) * w, y: gesture.mid.y - ((cy - r.top) / r.height) * h, w, h });
     }
   });
 
   function endPointer(e) {
     if (!pointers.delete(e.pointerId)) return;
-    startGesture(); // från två fingrar till ett: fortsätt panorera utan hopp
-    if (!pointers.size) gesture = null;
+    if (pointers.size) startGesture(); // från två fingrar till ett: fortsätt dra utan hopp
+    else { gesture = null; if (svg.classList.contains('moving')) commit(); }
   }
   // Två fingrar på kartan ska zooma kartan, inte rulla eller zooma hela sidan.
   svg.addEventListener('touchmove', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
@@ -201,14 +261,13 @@
     const first = svg.querySelector('a.active') || svg.querySelector('a.earned, a.gold');
     let cx = W / 2, cy = H / 2;
     if (first) {
-      const box = first.getBBox();
-      cx = box.x + box.width / 2;
-      cy = box.y + box.height / 2;
+      const b = first.getBBox();
+      cx = b.x + b.width / 2;
+      cy = b.y + b.height / 2;
     }
-    view.w = W / 2.2;
-    view.h = view.w * aspect();
-    view.x = cx - view.w / 2;
-    view.y = cy - view.h / 2;
+    const w = W / 2.2, h = w * aspect();
+    cur = { x: cx - w / 2, y: cy - h / 2, w, h };
   }
-  apply();
+  commit();
+  window.addEventListener('resize', () => { stopTween(); commit(); });
 })();
