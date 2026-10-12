@@ -14,7 +14,7 @@
     selected = code;
   }
 
-  async function open(code) {
+  async function open(code, fromKeyboard = false) {
     select(code);
     const id = ++request;
     panel.hidden = false;
@@ -27,7 +27,7 @@
       if (id !== request) return; // ett nyare klick hann före
       panel.innerHTML = html;
       panel.classList.remove('loading');
-      panel.querySelector('.panel-close')?.focus({ preventScroll: true });
+      if (fromKeyboard) panel.querySelector('.panel-close')?.focus({ preventScroll: true });
       if (window.matchMedia('(max-width: 899px)').matches) {
         panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
@@ -48,7 +48,7 @@
     const link = e.target.closest('a[data-code]');
     if (!link || e.metaKey || e.ctrlKey || e.shiftKey) return;
     e.preventDefault();
-    open(link.dataset.code);
+    open(link.dataset.code, e.detail === 0); // detail 0 = aktiverad med tangentbordet
   });
 
   panel.addEventListener('click', (e) => {
