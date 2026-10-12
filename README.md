@@ -6,7 +6,7 @@ Laga världens nationalrätter och samla flaggor.
 - **Guldkant:** laga den *på* nationaldagen.
 - **Kontinentbadge:** samla alla flaggor i en kontinent. Är alla flaggor guld blir badgen guld.
 - **Världskarta på startsidan:** veckans nationaldagsländer lyser, dina flaggor färgas gröna/guld. Tryck på ett land för huvudstad, nationalrätt och matkultur – och lagningsknappen om landet firar den veckan.
-- Konton, egen samling (`/kock/<användarnamn>`) och topplista.
+- Konton, egen samling (`/kock/<användarnamn>`) med alla tagna flaggor på en världskarta, och topplista.
 
 ## Kom igång
 

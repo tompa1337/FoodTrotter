@@ -59,9 +59,9 @@
     if (e.key === 'Escape' && !panel.hidden) close();
   });
 
-  // På smala skärmar är kartan bredare än skärmen: centrera på veckans första land.
+  // På smala skärmar är kartan bredare än skärmen: centrera på första markerade land.
   if (scroller && scroller.scrollWidth > scroller.clientWidth) {
-    const first = svg.querySelector('a.active');
+    const first = svg.querySelector('a.active') || svg.querySelector('a.earned, a.gold');
     if (first) {
       const box = first.getBoundingClientRect();
       const host = scroller.getBoundingClientRect();

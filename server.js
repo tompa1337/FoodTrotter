@@ -240,6 +240,7 @@ function dynamicRoute(method, path, ctx) {
     return {
       title: owner.display_name,
       active: ctx.user?.id === owner.id ? 'collection' : null,
+      scripts: ['/static/map.js'],
       body: V.collectionPage({ owner, isMe: ctx.user?.id === owner.id, collection: collectionFor(owner.id) }),
     };
   }
